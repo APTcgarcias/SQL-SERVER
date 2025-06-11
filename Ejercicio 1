@@ -1,1 +1,120 @@
+Crea una carpeta en tu disco local para almacenar los archivos .mdf y .ldf Ejemplo: C:\SQLDataServer\DemoBase\
 
+-- 💡 Este comando elimina la base si ya existía
+-- Solo debes usarlo en entornos de prueba, porque borra todo
+DROP DATABASE IF EXISTS DemoBase;
+GO
+
+-- 🏗️ Creación de la base de datos
+CREATE DATABASE DemoBase
+ON PRIMARY  -- PRIMARY es el grupo principal de archivos
+(
+    NAME = DemoBase_Data,  -- Nombre lógico que SQL Server usará internamente
+    FILENAME = 'C:\SQLDataServer\DemoBase\DemoBase_Data.mdf',  -- Archivo físico principal
+    SIZE = 10MB,         -- Tamaño inicial del archivo .mdf
+    MAXSIZE = 100MB,     -- Tamaño máximo que puede alcanzar
+    FILEGROWTH = 5MB     -- Crece de 5MB en 5MB cuando se llena
+)
+LOG ON  -- Parte del archivo de transacciones
+(
+    NAME = DemoBase_Log,
+    FILENAME = 'C:\SQLDataServer\DemoBase\DemoBase_Log.ldf',
+    SIZE = 5MB,
+    MAXSIZE = 50MB,
+    FILEGROWTH = 5MB
+);
+GO
+-- Muestra los archivos que forman parte de la base de datos
+USE DemoBase;
+GO
+
+SELECT
+    name AS Nombre_Logico,
+    physical_name AS Ruta_Archivo,
+    type_desc AS Tipo,
+    size * 8 / 1024 AS Tamano_MB,
+    growth * 8 / 1024 AS Incremento_MB
+FROM sys.database_files;
+
+
+
+-- 📘 Información general de la base de datos
+EXEC sp_helpdb DemoBase;
+
+-- 📘 Información de los archivos asociados a esta base
+EXEC sp_helpfile;
+CREATE TABLE Productos (
+    ID INT PRIMARY KEY,
+    Nombre NVARCHAR(100)
+);
+
+INSERT INTO Productos VALUES (1, 'Notebook'), (2, 'Impresora');
+
+SELECT * FROM Productos;
+
+Tarea sugerida
+Cambia la base para que tenga un archivo .ndf adicional y crea un nuevo filegroup.
+Inserta una tabla en el nuevo filegroup (¿recuerdas cómo hacerlo? ).
+Usa DBCC SHRINKFILE para ver qué ocurre con el tamaño de un archivo.
+Solución
+-- Añade un grupo lógico de archivos llamado FG_DatosExtra
+ALTER DATABASE DemoBase
+ADD FILEGROUP FG_DatosExtra;
+GO
+
+-- Crea un nuevo archivo físico y lo asigna al filegroup anterior
+ALTER DATABASE DemoBase
+ADD FILE (
+    NAME = DemoBase_Extra,  -- Nombre lógico
+    FILENAME = 'C:\SQLDataServer\DemoBase\DemoBase_Extra.ndf',  -- Archivo real en disco
+    SIZE = 5MB,
+    MAXSIZE = 50MB,
+    FILEGROWTH = 5MB
+)
+TO FILEGROUP FG_DatosExtra;
+GO
+Establecer el filegroup nuevo como predeterminado
+-- Esto indica que cualquier nueva tabla que no especifique filegroup,
+-- se creará en FG_DatosExtra en lugar del PRIMARY
+ALTER DATABASE DemoBase
+MODIFY FILEGROUP FG_DatosExtra DEFAULT;
+GO
+Crear una tabla en ese filegroup
+-- Crea una tabla en el filegroup FG_DatosExtra (que ahora es el predeterminado)
+CREATE TABLE ClientesImportantes (
+    ID INT PRIMARY KEY,
+    Nombre NVARCHAR(100)
+);
+GO
+
+INSERT INTO ClientesImportantes VALUES (1, 'Banco Chile'), (2, 'Gobierno de Chile');
+SELECT * FROM ClientesImportantes;
+🛠️ Paso 5: Verificar que la tabla está en el archivo .ndf
+-- Consulta interna para ver en qué filegroup está cada tabla
+SELECT 
+    o.name AS Tabla,
+    i.data_space_id,
+    fg.name AS FileGroup
+FROM sys.indexes i
+JOIN sys.objects o ON i.object_id = o.object_id
+JOIN sys.filegroups fg ON i.data_space_id = fg.data_space_id
+WHERE o.type = 'U'  -- U = User table
+AND o.name = 'ClientesImportantes';
+SELECT 
+    o.name AS Tabla,
+    i.data_space_id,
+    fg.name AS FileGroup
+FROM sys.indexes i
+JOIN sys.objects o ON i.object_id = o.object_id
+JOIN sys.filegroups fg ON i.data_space_id = fg.data_space_id
+WHERE o.type = 'U';
+
+ALTER DATABASE DemoBase
+MODIFY FILEGROUP [PRIMARY] DEFAULT;
+GO
+
+CREATE TABLE Empleados (
+    ID INT PRIMARY KEY,
+    Nombre NVARCHAR(100)
+) ON FG_DatosExtra
+GO
