@@ -1,59 +1,42 @@
-BACKUP DATABASE AcademiaEjemploDB -- Hace una copia completa de la base de datos
-TO DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak' -- Ruta donde se guarda el backup
-WITH INIT, -- Sobrescribe el archivo de backup si ya existe
-	 NAME = 'FullBackup'; -- Nombre descriptivo para identificar este backup
+-- Crear base de datos
+CREATE DATABASE AcademiaEjemploDB;
 GO
 
--- Cambios posteriores
-INSERT INTO Inscripciones (IDEstudiante, IDCurso, FechaInscripcion) -- Inserta un registro nuevo
-VALUES (1, 2, '2024-06-03'); -- Datos del registro insertado
+USE AcademiaEjemploDB;
 GO
 
-BACKUP LOG AcademiaEjemploDB -- Hace un backup solo del log de transacciones 
-TO DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak' -- Usa el mismo archivo, se agrega como otro "segmento"
-WITH NAME = 'LogBackup1'; -- Nombre para identificar este backup de log
+-- Crear tabla de estudiantes
+CREATE TABLE Estudiantes (
+    IDEstudiante INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre NVARCHAR(100) NOT NULL
+);
 GO
 
-INSERT INTO Inscripciones (IDEstudiante, IDCurso, FechaInscripcion) -- Otro registro nuevo
-VALUES (2, 1, '2024-06-04'); -- Datos del registro insertado
+-- Crear tabla de cursos
+CREATE TABLE Cursos (
+    IDCurso INT IDENTITY(1,1) PRIMARY KEY,
+    NombreCurso NVARCHAR(100) NOT NULL
+);
 GO
 
-BACKUP LOG AcademiaEjemploDB -- Otro backup del log de transacciones
-TO DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak' -- Mismo archivo, se agrega otro segmento
-WITH NAME = 'LogBackup2'; -- Nombre para identificar este backup de log
+-- Crear tabla de inscripciones
+CREATE TABLE Inscripciones (
+    IDInscripcion INT IDENTITY(1,1) PRIMARY KEY,
+    IDEstudiante INT,
+    IDCurso INT,
+    FechaInscripcion DATE,
+    FOREIGN KEY (IDEstudiante) REFERENCES Estudiantes(IDEstudiante),
+    FOREIGN KEY (IDCurso) REFERENCES Cursos(IDCurso)
+);
 GO
 
-
-USE master; -- Cambia a la base de datos 'master' para poder eliminar la otra base
+-- Insertar datos iniciales
+INSERT INTO Estudiantes (Nombre) VALUES (N'Ana Torres'), (N'Luis Pérez');
+INSERT INTO Cursos (NombreCurso) VALUES (N'SQL Básico'), (N'Introducción a Python');
+INSERT INTO Inscripciones (IDEstudiante, IDCurso, FechaInscripcion)
+VALUES (1, 1, '2024-06-01'), (2, 2, '2024-06-02');
 GO
 
--- Forzar la desconexión de todos los usuarios
-ALTER DATABASE AcademiaEjemploDB
-SET SINGLE_USER -- Solo un usuario puede conectarse (necesario para eliminar la base)
-WITH ROLLBACK IMMEDIATE; -- Expulsa a todos los usuarios y cancela sus transacciones inmediatamente
-GO
-
-DROP DATABASE AcademiaEjemploDB; -- Elimina la base de datos (simula un fallo)
-
--- RESTORE HEADERONLY sirve para mostrar todos los respaldos (FULL, DIFERENCIAL, LOG, etc.) que están guardados dentro del archivo .bak.
-RESTORE HEADERONLY 
-FROM DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak'; -- Indica el archivo de backup que quieres inspeccionar
-GO
-
--- Full
-RESTORE DATABASE AcademiaEjemploDB -- Restaura la base de datos desde el backup completo
-FROM DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak' -- Ruta del backup
-WITH FILE = 1, -- Indica que use el primer segmento del archivo (el backup completo)
-     NORECOVERY; -- Deja la base en estado "restaurando", lista para aplicar más backups (no permite conexiones aún)
-GO
-
-RESTORE LOG AcademiaEjemploDB -- Restaura el primer backup de log
-FROM DISK = 'C:\Backups\AcademiaEjemploDB_Estrategia3.bak' -- Mismo archivo de backup
-WITH FILE = 2, -- Usa el segundo segmento (primer backup de log)
-     NORECOVERY; -- Sigue en modo "restaurando" para poder aplicar más logs después
-GO
-
--- Verificar datos restaurados
-USE AcademiaEjemploDB; -- Cambia a la base restaurada
-SELECT * FROM Inscripciones; -- Muestra los datos para verificar que todo se recuperó bien
+-- Establecer modo FULL
+ALTER DATABASE AcademiaEjemploDB SET RECOVERY FULL;
 GO
